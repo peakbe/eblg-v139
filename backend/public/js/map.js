@@ -23,6 +23,20 @@ let noiseZonesLayer = L.layerGroup();
 // Tracks mémoire
 const adsbTracks = new Map();
 
+// Bouton reset map
+ export function resetMapView() {
+    if (!map) return;
+
+    map.flyTo(
+        [50.645, 5.46],   // centre EBLG
+        12,               // zoom
+        {
+            animate: true,
+            duration: 1.2,     // durée totale
+            easeLinearity: 0.25 // easing smooth
+        }
+    );
+}
 // ======================================================
 // INIT MAP
 // ======================================================
