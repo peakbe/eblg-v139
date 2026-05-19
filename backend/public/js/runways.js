@@ -115,3 +115,20 @@ export function computeCrosswind(windDir, windSpeed, rwyHeading) {
 
     return { crosswind, headwind };
 }
+// ======================================================
+// WIND COMPONENTS — PRO+++
+// ======================================================
+export function computeWindComponents(windDir, windSpeed, runwayHeading) {
+    if (windDir == null || windSpeed == null) {
+        return { headwind: 0, crosswind: 0 };
+    }
+
+    // Angle entre vent et axe piste
+    const angle = ((windDir - runwayHeading + 360) % 360);
+    const rad = angle * Math.PI / 180;
+
+    const headwind = Math.round(windSpeed * Math.cos(rad));
+    const crosswind = Math.round(windSpeed * Math.sin(rad));
+
+    return { headwind, crosswind };
+}
