@@ -1,3 +1,8 @@
+// ======================================================
+// EBLG DASHBOARD — BACKEND PRO++
+// server.mjs
+// ======================================================
+
 import express from "express";
 import cors from "cors";
 import path from "path";
@@ -9,17 +14,123 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// CORS (optionnel)
+// ------------------------------------------------------
+// MIDDLEWARES
+// ------------------------------------------------------
 app.use(cors());
 
-// STATIC FRONTEND
 const publicDir = path.join(__dirname, "public");
 app.use(express.static(publicDir));
 
-// --------------------------------------------------
-// ADS-B Airlabs PRO+++ (cache + normalisation)
-// --------------------------------------------------
+// ======================================================
+// METAR — EBLG
+// ======================================================
+app.get("/metar", async (req, res) => {
+    try {
+        const url = "https://api.checkwx.com/metar/EBLG/decoded";
+        const r = await fetch(url, {
+            headers: { "X-API-Key": process.env.CHECKWX_KEY }
+        });
 
+        if (!r.ok) {
+            console.error("[METAR] HTTP", r.status);
+            return res.json({ fallback: true, raw: "METAR indisponible" });
+        }
+
+        const json = await r.json();
+        return res.json(json);
+
+    } catch (err) {
+        console.error("[METAR] Erreur", err);
+        return res.json({ fallback: true, raw: "METAR indisponible" });
+    }
+});
+
+// ======================================================
+// TAF — EBLG
+// ======================================================
+app.get("/taf", async (req, res) => {
+    try {
+        const url = "https://api.checkwx.com/taf/EBLG/decoded";
+        const r = await fetch(url, {
+            headers: { "X-API-Key": process.env.CHECKWX_KEY }
+        });
+
+        if (!r.ok) {
+            console.error("[TAF] HTTP", r.status);
+            return res.json({ fallback: true, raw: "TAF indisponible" });
+        }
+
+        const json = await r.json();
+        return res.json(json);
+
+    } catch (err) {
+        console.error("[TAF] Erreur", err);
+        return res.json({ fallback: true, raw: "TAF indisponible" });
+    }
+});
+
+// ======================================================
+// FIDS — MODE AUTONOME PRO++
+// (à remplacer plus tard par une vraie source si tu veux)
+// ======================================================
+app.get("/fids", (req, res) => {
+    const now = new Date();
+    const iso = now.toISOString();
+
+    const payload = {
+        arrivals: [
+            {
+                flight: "FX123",
+                from: "CDG",
+                eta: iso,
+                status: "ON TIME"
+            },
+            {
+                flight: "FX456",
+                from: "LEJ",
+                eta: iso,
+                status: "LANDED"
+            }
+        ],
+        departures: [
+            {
+                flight: "FX789",
+                to: "CGN",
+                etd: iso,
+                status: "BOARDING"
+            },
+            {
+                flight: "FX999",
+                to: "CDG",
+                etd: iso,
+                status: "DELAYED"
+            }
+        ]
+    };
+
+    res.json(payload);
+});
+
+// ======================================================
+// SONOMETERS — MODE AUTONOME PRO++
+// ======================================================
+app.get("/sonos", (req, res) => {
+    const payload = {
+        sensors: [
+            { id: 1, name: "NORD",  lat: 50.646, lon: 5.445, db: 42 },
+            { id: 2, name: "SUD",   lat: 50.635, lon: 5.460, db: 48 },
+            { id: 3, name: "EST",   lat: 50.640, lon: 5.470, db: 51 },
+            { id: 4, name: "OUEST", lat: 50.642, lon: 5.430, db: 39 }
+        ]
+    };
+
+    res.json(payload);
+});
+
+// ======================================================
+// ADS-B — AIRLABS PRO++ (cache + normalisation)
+// ======================================================
 let adsbCache = null;
 let adsbCacheTime = 0;
 
@@ -33,7 +144,6 @@ app.get("/api/adsb", async (req, res) => {
 
     try {
         const url = `https://airlabs.co/api/v9/flights?api_key=${process.env.AIRLABS_KEY}`;
-
         const r = await fetch(url);
 
         if (!r.ok) {
@@ -45,7 +155,6 @@ app.get("/api/adsb", async (req, res) => {
         const json = await r.json();
         const flights = json.response || [];
 
-        // Normalisation → format attendu par map.js : { ac: [...] }
         const ac = flights
             .map(f => {
                 if (!f.lat || !f.lng) return null;
@@ -78,60 +187,16 @@ app.get("/api/adsb", async (req, res) => {
     }
 });
 
-app.get("/metar", async (req, res) => {
-    try {
-        const url = "https://api.checkwx.com/metar/EBLG/decoded";
-        const r = await fetch(url, { headers: { "X-API-Key": process.env.CHECKWX_KEY }});
-        const json = await r.json();
-        res.json(json);
-    } catch (err) {
-        res.json({ fallback: true, raw: "METAR indisponible" });
-    }
-});
-
-app.get("/taf", async (req, res) => {
-    try {
-        const url = "https://api.checkwx.com/taf/EBLG/decoded";
-        const r = await fetch(url, { headers: { "X-API-Key": process.env.CHECKWX_KEY }});
-        const json = await r.json();
-        res.json(json);
-    } catch (err) {
-        res.json({ fallback: true, raw: "TAF indisponible" });
-    }
-});
-
-app.get("/fids", (req, res) => {
-    const now = new Date().toISOString();
-
-    const payload = {
-        arrivals: [
-            { flight: "FX123", from: "CDG", eta: now, status: "ON TIME" }
-        ],
-        departures: [
-            { flight: "FX456", to: "LEJ", etd: now, status: "BOARDING" }
-        ]
-    };
-
-    res.json(payload);
-});
-
-app.get("/sonos", (req, res) => {
-    const payload = {
-        sensors: [
-            { id: 1, lat: 50.64, lon: 5.44, db: 42 },
-            { id: 2, lat: 50.65, lon: 5.45, db: 48 }
-        ]
-    };
-
-    res.json(payload);
-});
-
-// FALLBACK SPA
+// ======================================================
+// FALLBACK SPA — TOUJOURS EN DERNIER
+// ======================================================
 app.get("*", (req, res) => {
     res.sendFile(path.join(publicDir, "index.html"));
 });
 
+// ======================================================
 // START
+// ======================================================
 app.listen(PORT, () => {
     console.log(`[SERVER] Listening on port ${PORT}`);
 });
